@@ -2,7 +2,10 @@
 
 All notable changes to KAT Mobile are documented here.
 
-## [Unreleased]
+## [1.30.1] - 2026-11-27
+
+A Flipper Zero as the phone's radio, receiving and transmitting as with desktop KAT; captures sent
+where their remote was heard; one entry per press; and KAT 1.30.1's core.
 
 ### Added
 

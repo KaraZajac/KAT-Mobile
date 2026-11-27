@@ -7,8 +7,8 @@ plugins {
 }
 
 // KAT Mobile's version follows KAT's. The version code is major * 10000 + minor * 100 + patch
-// (1.30.0 is 13000; 0.8.0 was 9).
-val katMobileVersion = "1.30.0"
+// (1.30.1 is 13001; 0.8.0 was 9).
+val katMobileVersion = "1.30.1"
 // The KAT release the receive core comes from: native/Cargo.toml's package version.
 val katCoreVersion = Regex("""(?m)^version\s*=\s*"([^"]+)"""")
     .find(rootProject.file("native/Cargo.toml").readText())?.groupValues?.get(1)

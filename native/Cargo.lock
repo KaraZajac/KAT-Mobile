@@ -204,7 +204,7 @@ dependencies = [
 
 [[package]]
 name = "kat-mobile-rx-core"
-version = "1.30.0"
+version = "1.30.1"
 dependencies = [
  "anyhow",
  "chrono",
