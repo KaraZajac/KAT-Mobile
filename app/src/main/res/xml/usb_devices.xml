@@ -1,4 +1,6 @@
 <resources>
+    <!-- Flipper Zero (its USB console: ST's virtual COM port) -->
+    <usb-device vendor-id="1155" product-id="22336"/> <!-- 0x0483:0x5740 Flipper Zero -->
     <!-- HackRF -->
     <usb-device vendor-id="7504" product-id="24713"/> <!-- 0x1d50:0x6089 HackRF One -->
     <usb-device vendor-id="7504" product-id="24651"/> <!-- 0x1d50:0x604b HackRF Jawbreaker -->

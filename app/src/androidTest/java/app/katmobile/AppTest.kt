@@ -72,7 +72,7 @@ class AppTest {
     }
     @Test fun noUsbDeviceCannotBecomeFakeLiveReception(){
         compose.onNodeWithText("Start RX").performClick()
-        compose.onNodeWithText("No HackRF or RTL-SDR device found.",substring=true).assertExists()
+        compose.onNodeWithText("No HackRF, RTL-SDR or Flipper Zero found.",substring=true).assertExists()
         assertFalse(Hub.status.value.running)
         compose.onNodeWithText("OK").performClick()
     }
@@ -189,7 +189,7 @@ class AppTest {
         capture("10-transmit")
         compose.onNodeWithText("Send next code").performScrollTo().performClick()
         compose.waitUntil(5000){Hub.notice.value.isNotBlank()}
-        compose.onNodeWithText("No HackRF device.",substring=true).assertExists()
+        compose.onNodeWithText("No HackRF or Flipper Zero to transmit with.",substring=true).assertExists()
         compose.onNodeWithText("OK").performClick()
         assertFalse(Hub.status.value.transmitting);assertNull(Hub.pendingTx.get())
         compose.onNodeWithText("Close").performClick()
@@ -224,7 +224,10 @@ class AppTest {
         }
         val c=captures.first{it.protocol.split(" + ").contains("Princeton")}
         val fob=StateFormat.fob(c);val restored=StateFormat.importFob(fob)
-        assertEquals(c.pulses,restored.pulses);assertEquals(c.frequency,restored.frequency);assertEquals(c.modulation,restored.modulation)
+        assertEquals(c.pulses,restored.pulses);assertEquals(c.modulation,restored.modulation)
+        // The remote was 25 kHz below the tuned frequency: the .fob (which has no offset field) says where it was heard, and the import sends it there too.
+        assertEquals(-25_000.0,c.offsetHz!!,2_000.0)
+        assertEquals(c.heardFrequency,restored.frequency);assertEquals(c.heardFrequency,restored.heardFrequency)
         val root=com.google.gson.JsonParser.parseString(fob).asJsonObject
         assertEquals(c.pulses.size,root["capture"].asJsonObject["raw_pair_count"].asInt)
         assertTrue(c.pulses.size>=190)

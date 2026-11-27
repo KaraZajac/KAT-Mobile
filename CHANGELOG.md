@@ -6,6 +6,15 @@ All notable changes to KAT Mobile are documented here.
 
 ### Added
 
+- **Flipper Zero over USB OTG**, receive and transmit, the way desktop KAT uses one (#2 asked for a
+  CC1101 on a serial line; this is the Flipper's): its command line streams `subghz rx_raw`, KAT's
+  decoders read the stream and each frame they find is cut out of the noise around it and listed
+  like an SDR's burst; a transmission goes out as a RAW `.sub` written to its SD card and played with
+  `subghz tx_from_file`, receiving paused for it. The console session and the stream are desktop
+  KAT's code, unchanged (`radio/flipper_console.rs`); the USB serial connection (CDC: 115200 8N1,
+  DTR raised) is the app's (`FlipperUsb.kt`). No IQ, so no spectrum, recording or hopping; OOK
+  reception. Without a HackRF, the Flipper transmits. Tested against a simulated Flipper console, not
+  yet with a real Flipper on a phone.
 - **RTL-SDR over USB OTG** (receive only), contributed by @0magicinside (#1): RTL2832U dongles
   with an R820T, R820T2 or R828D tuner (RTL-SDR Blog V3 and V4 among them), through Android's USB
   host API with no root and no driver app. The dongle is set up by desktop KAT's RTL-SDR driver

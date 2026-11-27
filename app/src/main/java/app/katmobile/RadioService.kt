@@ -2,6 +2,7 @@ package app.katmobile
 
 import android.app.*
 import android.content.*
+import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
 import android.os.*
 import kotlinx.coroutines.*
@@ -27,6 +28,10 @@ class RadioService:Service() {
     private var recordLimit=0L
     private var lastFrequency=0L
     private var bytes=0L
+    /** The Flipper Zero receiving now (its device name): its loop owns the console, so a transmission waits there ([flipperTx]). */
+    @Volatile private var flipperReceiving:String?=null
+    /** A transmission for the receiving Flipper, sent by its loop between reads. */
+    private val flipperTx=java.util.concurrent.atomic.AtomicReference<Hub.TxRequest?>(null)
     override fun onBind(intent:Intent?)=null
     override fun onCreate(){super.onCreate();Hub.initialize(this);getSystemService(NotificationManager::class.java).createNotificationChannel(NotificationChannel("radio","USB radio reception",NotificationManager.IMPORTANCE_LOW))}
     override fun onStartCommand(intent:Intent?,flags:Int,startId:Int):Int {
@@ -34,7 +39,7 @@ class RadioService:Service() {
         if(action=="START"||action=="TX"){
             val manager=getSystemService(UsbManager::class.java)
             val device=manager.deviceList.values.firstOrNull{
-                it.deviceName==intent.getStringExtra("device")&&if(action=="TX")HackRfUsb.supported(it)else SdrDevices.supported(it)
+                it.deviceName==intent.getStringExtra("device")&&if(action=="TX")HackRfUsb.supported(it)||SdrDevices.isFlipper(it) else SdrDevices.supported(it)
             }
             if(device==null||!manager.hasPermission(device)){Hub.notice.value="The USB device is no longer available";if(action=="TX")Hub.pendingTx.set(null);stopIfIdle();return START_NOT_STICKY}
             try{startForeground(8,notification())}catch(e:Exception){Hub.notice.value=e.message?:"Reception did not start";if(action=="TX")Hub.pendingTx.set(null);stopIfIdle();return START_NOT_STICKY}
@@ -47,13 +52,15 @@ class RadioService:Service() {
         }
         return START_NOT_STICKY
     }
-    private fun busy()=job?.isActive==true||txJob?.isActive==true
+    private fun busy()=job?.isActive==true||txJob?.isActive==true||flipperTx.get()!=null
     private fun stopIfIdle(){if(!busy())stopSelf()}
     /** One transmission (Hub.pendingTx). Receiving pauses for it and resumes, as desktop KAT does with one HackRF. */
     private fun transmit(name:String){
         val request=Hub.pendingTx.getAndSet(null)?:run{stopIfIdle();return}
-        if(txJob?.isActive==true){Hub.notice.value="A transmission is already on air";return}
+        if(txJob?.isActive==true||flipperTx.get()!=null){Hub.notice.value="A transmission is already on air";return}
         if(recording!=null){Hub.notice.value="Stop the IQ recording before transmitting";stopIfIdle();return}
+        val flipper=getSystemService(UsbManager::class.java).deviceList.values.firstOrNull{it.deviceName==name&&SdrDevices.isFlipper(it)}
+        if(flipper!=null){transmitWithFlipper(flipper,request);return}
         val receiving=job?.isActive==true
         val resumeDevice=activeDeviceName.ifBlank{name}
         txJob=scope.launch{
@@ -81,6 +88,101 @@ class RadioService:Service() {
             }
         }
     }
+    private fun txStarted(request:Hub.TxRequest){
+        Hub.status.update{it.copy(transmitting=true,message="Transmitting ${request.what}…")}
+        Hub.txMessage.value="Transmitting ${request.what}…"
+    }
+    private fun txFailed(e:Exception){
+        Hub.log("TX failed: ${e.message}")
+        Hub.txMessage.value="Transmission failed: ${e.message}"
+        Hub.notice.value="Transmission failed: ${e.message}"
+    }
+    /**
+     * A transmission through a Flipper Zero, as desktop KAT sends one: KAT's core writes it as a RAW
+     * .sub on the Flipper's SD card and plays it (`subghz tx_from_file`). When the Flipper is
+     * receiving, its loop sends it between reads (receiving pauses and resumes); else a session of
+     * its own opens the console for it.
+     */
+    private fun transmitWithFlipper(device:UsbDevice,request:Hub.TxRequest){
+        if(flipperReceiving==device.deviceName&&job?.isActive==true){txStarted(request);flipperTx.set(request);return}
+        txJob=scope.launch{
+            txStarted(request)
+            try{
+                FlipperUsb(getSystemService(UsbManager::class.java),device).use{usb->NativeFlipper.open(usb).use{it.transmit(request.plan,request.carrier)}}
+                Hub.transmitted(request)
+            }catch(e:CancellationException){throw e}
+            catch(e:Exception){txFailed(e)}
+            finally{
+                Hub.status.update{it.copy(transmitting=false,message=Hub.txMessage.value)}
+                if(job?.isActive!=true)stopSelf()
+            }
+        }
+    }
+    /** A transmission the receiving Flipper's loop picked up. */
+    private fun sendOnFlipper(session:NativeFlipper.Session,request:Hub.TxRequest){
+        try{session.transmit(request.plan,request.carrier);Hub.transmitted(request)}
+        catch(e:Exception){txFailed(e)}
+        finally{Hub.status.update{it.copy(transmitting=false,message=Hub.txMessage.value)}}
+    }
+    /**
+     * Receive with a Flipper Zero, as desktop KAT does (`src/radio/flipper.rs`): `subghz rx_raw` on
+     * its command line streams the CC1101's pulses; KAT's core reads them as they come and cuts each
+     * frame its decoders find out of the noise around it, and the frame is listed like an SDR's
+     * burst. No IQ, so no spectrum, no level and no recording; no hopping (each retune restarts
+     * `rx_raw`); OOK, the firmware's own receive preset.
+     */
+    private fun startFlipperReceiver(manager:UsbManager,device:UsbDevice){
+        val s=Hub.settings.value
+        val frequency=s.frequency
+        activeDeviceName=device.deviceName
+        flipperReceiving=device.deviceName
+        lastFrequency=frequency
+        Hub.status.value=RadioStatus(running=true,device=SdrDevices.displayName(device),radioKind=RadioKind.FLIPPER,frequency=frequency,message="Opening the Flipper Zero's console…")
+        wake=getSystemService(PowerManager::class.java).newWakeLock(PowerManager.PARTIAL_WAKE_LOCK,"KAT:rx").apply{acquire(24*60*60*1000L)}
+        job=scope.launch{
+            val recognizer=ProtocolRecognizer()
+            fun accept(b:NativeFlipper.Burst){
+                if(b.pulses.size !in 8..32768||b.pulses.any{it==0||it==Int.MIN_VALUE})return
+                val pulses=b.pulses.map{Pulse(it>0,kotlin.math.abs(it))}
+                val match=recognizer.identify(pulses,"AM",frequency,receiverPath=true)
+                if(match==null&&!s.showUnknown)return
+                Hub.add(Capture(frequency=frequency,modulation="AM",protocol=match?.name?:"Unknown",source=RadioKind.FLIPPER.label,
+                    recognition=listOfNotNull(match?.evidence,"Flipper Zero · rx_raw").joinToString(" · "),pulses=pulses).withDecode(match?.decode.orEmpty()))
+            }
+            try{
+                FlipperUsb(manager,device).use{usb->
+                    NativeFlipper.open(usb).use{session->
+                        session.startRx(frequency)
+                        Hub.status.value=Hub.status.value.copy(firmware=usb.description,
+                            message=if(s.hopping)"Reception is active · a Flipper does not hop: ${"%.3f".format(java.util.Locale.US,frequency/1e6)} MHz only" else "Reception is active")
+                        Hub.log("Flipper Zero RX opened · ${usb.description} · subghz rx_raw $frequency")
+                        var refresh=SystemClock.elapsedRealtime();var counted=0L
+                        while(isActive){
+                            flipperTx.getAndSet(null)?.let{sendOnFlipper(session,it)}
+                            val out=session.pump()
+                            out.bursts.forEach(::accept)
+                            if(out.closed)error(out.error?:"The Flipper's console closed (unplugged?)")
+                            out.error?.let{error("Flipper Zero: $it")}
+                            val now=SystemClock.elapsedRealtime()
+                            if(now-refresh>=200){
+                                val total=usb.bytesReceived
+                                Hub.status.update{it.copy(bytes=total,bytesPerSecond=(total-counted)*1000/(now-refresh).coerceAtLeast(1))}
+                                counted=total;refresh=now
+                            }
+                        }
+                        session.stopRx().bursts.forEach(::accept)
+                    }
+                }
+            }catch(_:CancellationException){}
+            catch(e:Exception){Hub.log("RX stopped: ${e.message}");Hub.notice.value=e.message?:"Flipper Zero reception interrupted"}
+            finally{
+                flipperReceiving=null
+                flipperTx.getAndSet(null)?.let{txFailed(IllegalStateException("the Flipper stopped receiving before it was sent"));Hub.status.update{it.copy(transmitting=false)}}
+                Hub.status.value=Hub.status.value.copy(running=false,message="Reception stopped",bytesPerSecond=0,recording="")
+                withContext(NonCancellable){Hub.flush()};if(txJob?.isActive!=true)stopSelf()
+            }
+        }
+    }
     private fun notification():Notification {
         val open=PendingIntent.getActivity(this,0,Intent(this,MainActivity::class.java),PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         val stop=PendingIntent.getService(this,1,Intent(this,RadioService::class.java).setAction("STOP"),PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
@@ -94,6 +196,7 @@ class RadioService:Service() {
         val device=manager.deviceList.values.firstOrNull{it.deviceName==name&&SdrDevices.supported(it)}
         val kind=device?.let(SdrDevices::kindOf)
         if(device==null||kind==null||!manager.hasPermission(device)){Hub.notice.value="USB SDR device is unavailable or permission is missing";stopSelf();return}
+        if(kind==RadioKind.FLIPPER){startFlipperReceiver(manager,device);return}
         val s=Hub.settings.value
         val rate=if(kind==RadioKind.RTLSDR)s.rtlSampleRate else s.sampleRate
         activeDeviceName=device.deviceName
@@ -178,6 +281,7 @@ class RadioService:Service() {
         try{synchronized(fileLock){
             if(recording!=null){closeRecording();return}
             check(Hub.status.value.running){"Start reception first"}
+            check(Hub.status.value.radioKind!=RadioKind.FLIPPER){"A Flipper Zero gives pulses, not IQ: recording needs a HackRF or an RTL-SDR"}
             val s=Hub.settings.value;check(!s.hopping){"Disable Hop before IQ recording; recordings require a fixed frequency"}
             val dir=File(getExternalFilesDir(null),"recordings").apply{mkdirs()}
             check(dir.usableSpace>100L*1024*1024){"Not enough storage"}

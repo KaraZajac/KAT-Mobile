@@ -1,10 +1,10 @@
 # KAT Mobile
 
 The Android edition of [KAT](https://github.com/KaraZajac/KAT), the Keyfob Analysis Toolkit. A phone
-with a **HackRF** or **RTL-SDR** on USB OTG receives, records and identifies car key fob, gate, garage
-door and sensor signals with KAT's own code, without a computer — and transmits with a HackRF: Replay,
-and KAT's encoders for "Send next code" and the car and gate buttons, a rolling code's counter advancing
-with every press. Key recovery is not part of the app.
+with a **HackRF**, an **RTL-SDR** or a **Flipper Zero** on USB OTG receives, records and identifies car
+key fob, gate, garage door and sensor signals with KAT's own code, without a computer — and transmits
+with a HackRF or a Flipper Zero: Replay, and KAT's encoders for "Send next code" and the car and gate
+buttons, a rolling code's counter advancing with every press. Key recovery is not part of the app.
 
 KAT Mobile was written by **CooKie** as an Android adaptation of KAT, and is maintained here as
 KAT's official Android app.
@@ -33,18 +33,29 @@ arising from use of this software.
   no root and no external driver app. Sample rate (1.024–2.4 MS/s, 2.0 MS/s default), auto or manual
   tuner gain, PPM frequency correction, optional bias-tee, CU8 live spectrum/waterfall and `.cu8` IQ
   recording.
+- **Flipper Zero over USB OTG** — the Flipper's command line, as desktop KAT uses it: `subghz rx_raw`
+  streams its CC1101's pulses, KAT's decoders read them as they come, and each frame they find is cut
+  out of the noise around it and listed like an SDR's burst. Transmitting writes the transmission as a
+  RAW `.sub` on its SD card and plays it (`subghz tx_from_file`: OOK, or 2-FSK at the protocol's
+  deviation; the firmware's region lock applies). No IQ, so no spectrum, signal level, recording or
+  hopping, and OOK reception (the firmware's own preset). Official firmware, Momentum, RogueMaster,
+  Unleashed and the others desktop KAT follows; close any app on the Flipper first. Over USB only, as
+  desktop KAT: the Flipper's Bluetooth link carries its app protocol, not the command line. Not yet
+  tried with a real Flipper on a phone.
 - **KAT's core** — KAT 1.30.0's receive pipeline (burst detection, channel filtering, the AM and
   FM slicers), its protocol decoders and encoders and its embedded keys, built from KAT's Rust
   source and called over JNI. A signal is listed with its protocol, bit count, whether its
   checksum holds, and its serial, button and counter, as KAT lists them; frames that fail their
   checksum are dropped.
-- **Transmit (HackRF)** — from a signal's details, as KAT's signal menu offers it: **Replay** sends the
+- **Transmit (HackRF or Flipper Zero)** — from a signal's details, as KAT's signal menu offers it: **Replay** sends the
   recorded pulses; a car remote gets **TX Lock, Unlock, Trunk and Panic**, a gate, garage, barrier
   or alarm remote **Send next code** and its own buttons, from KAT's encoders with the copies KAT
   sends. A rolling code's capture keeps the frame sent, so the next press sends the code after.
   The waveform is KAT's (OOK or 2-FSK at the protocol's deviation, 500 kHz above the HackRF's LO,
   so its LO leakage stays out of the receiver's channel), at the TX power set in Settings
-  (desktop KAT's steps, 47 dB + amp by default). Receiving pauses for a transmission.
+  (desktop KAT's steps, 47 dB + amp by default). Receiving pauses for a transmission. A capture goes
+  out where its remote was heard: the frequency the radio was tuned to plus the offset KAT's receiver
+  measured. Without a HackRF, a Flipper Zero sends it (desktop KAT's order).
 - **A few more formats** — Nexus/TFA and Rubicson/Solight weather sensors, and Princeton, CAME and
   Nice FLO fixed codes when the core reads nothing, from a small recognizer in Kotlin.
 - **Live view** — spectrum, waterfall, signal level and data rate, the latest signal received, and
@@ -66,9 +77,9 @@ Download `KAT-Mobile-<version>.apk` from the [releases page](https://github.com/
 (each has a `.sha256` checksum), allow your browser or file manager to install apps, and open it.
 It needs a 64-bit ARM phone with Android 8.0 or later and USB OTG.
 
-Connect a HackRF or RTL-SDR with an OTG adapter or cable and press **Start RX**; Android asks for USB
-access the first time. A HackRF draws up to 500 mA and an RTL-SDR ~250–300 mA: if the phone cannot
-power it, use a powered USB hub.
+Connect a HackRF, RTL-SDR or Flipper Zero with an OTG adapter or cable and press **Start RX**; Android
+asks for USB access the first time. A HackRF draws up to 500 mA and an RTL-SDR ~250–300 mA: if the
+phone cannot power it, use a powered USB hub. A Flipper runs on its own battery.
 
 Releases are debug-signed for now. When KAT Mobile moves to a release key, the new build will not
 install over the old one: export your session first (Signals, Export session), uninstall, install
@@ -117,14 +128,16 @@ adb shell am instrument -w -e class app.katmobile.AppTest io.karazajac.katmobile
 
 CI runs all of them on every push, the instrumentation tests on an Android 14 emulator. The
 transmit tests send nothing on air: the encoders' frames are decoded back, the IQ goes through
-KAT's receiver, and the USB sequence runs against a simulated HackRF. Test a transmission on air
-with a receiver you own (KAT with an RTL-SDR, for instance).
+KAT's receiver, and the USB sequence runs against a simulated HackRF; the Flipper Zero session runs
+against a simulated Flipper command line (`native/tests/flipper_session.rs`, and over JNI on the
+device). Test a transmission on air with a receiver you own (KAT with an RTL-SDR, for instance).
 
 ## How it is built
 
 - `app/` — the Kotlin and Jetpack Compose app: the USB SDR abstraction (`SdrUsb.kt`), HackRF over
   USB (`HackRfUsb.kt`, and `Transmit.kt` for desktop KAT's transmit sequence), RTL-SDR over USB
-  (`RtlSdrUsb.kt`), the radio service, storage, import and export, and the tests.
+  (`RtlSdrUsb.kt`), the Flipper Zero's console over USB CDC (`FlipperUsb.kt`), the radio service,
+  storage, import and export, and the tests.
 - `native/src/` — KAT 1.30.0's code: its receive pipeline, decoders, encoders and transmit waveform
   (`radio/tx.rs`). 219 files are KAT's unchanged; the other four leave out what the app does not
   have (key recovery, the user's key files, the vulnerability database). `lib.rs`, `mobile_rx.rs`,

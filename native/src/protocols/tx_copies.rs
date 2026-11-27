@@ -14,8 +14,9 @@
 //! doctor-firmware's copies of the same encoders send 3. KAT sends 3; a key file's `Repeat: 10` gives
 //! ProtoPirate's full count. Ford V1 is the exception: its `encode` is the remote's whole press, the
 //! three sends whose flags bytes ProtoPirate's burst table holds but never sends (`ford_v1.rs`), so
-//! KAT sends it once, and `Repeat: n` n times. Every other count is the module's reference's: Honda Static / Kia V7
-//! 3, Kia V5 6 (ProtoPirate and doctor-firmware), Mazda Siemens 4 and GM 5 (Flipper-ARF).
+//! KAT sends it once, and `Repeat: n` n times. Every other count is the module's reference's: Honda
+//! Static / Kia V7 3, Kia V5 6 (ProtoPirate and doctor-firmware), Mazda Siemens 4 and GM 5
+//! (Flipper-ARF).
 //! Chrysler V0 and the Kia V0 family are not listed: their `encode` is the remote's whole press,
 //! sent once (Chrysler V0: the frame twice behind one preamble, where the references send payloads
 //! A and B twice; Kia V0: the press as the recorded remotes send it, where the references send their

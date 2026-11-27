@@ -3,10 +3,11 @@ package app.katmobile
 import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
 
-/** Supported USB SDR hardware families. */
+/** Supported USB radios: two SDR families, and the Flipper Zero, whose command line gives pulses (no IQ). */
 enum class RadioKind(val label:String,val supportsTx:Boolean) {
     HACKRF("HackRF",true),
-    RTLSDR("RTL-SDR",false)
+    RTLSDR("RTL-SDR",false),
+    FLIPPER("Flipper Zero",true)
 }
 
 /** Raw interleaved 8-bit IQ sample format delivered by a USB SDR. */
@@ -29,7 +30,7 @@ interface SdrUsb:AutoCloseable {
     fun stop()
 }
 
-/** Discovery and classification of supported USB SDR devices (HackRF and RTL2832U-based RTL-SDRs). */
+/** Discovery and classification of the supported USB radios (HackRF, RTL2832U-based RTL-SDRs, Flipper Zero). */
 object SdrDevices {
     /** Known RTL2832U VID/PID pairs (matching native/src/rtlsdr/device/constants.rs and usb_devices.xml). */
     val RTL_SDR_IDS:Set<Pair<Int,Int>> = setOf(
@@ -52,15 +53,20 @@ object SdrDevices {
 
     val HACKRF_IDS:Set<Pair<Int,Int>> = setOf(0x1d50 to 0x6089, 0x1d50 to 0x604b, 0x1d50 to 0xcc15)
 
+    /** The Flipper Zero's console (ST's virtual COM port ID, which desktop KAT also goes by). */
+    val FLIPPER_IDS:Set<Pair<Int,Int>> = setOf(FlipperUsb.VENDOR_ID to FlipperUsb.PRODUCT_ID)
+
     fun kindOf(vendorId:Int,productId:Int):RadioKind? = when {
         (vendorId to productId) in HACKRF_IDS -> RadioKind.HACKRF
         (vendorId to productId) in RTL_SDR_IDS -> RadioKind.RTLSDR
+        (vendorId to productId) in FLIPPER_IDS -> RadioKind.FLIPPER
         else -> null
     }
 
     fun kindOf(d:UsbDevice):RadioKind? = kindOf(d.vendorId,d.productId)
     fun isHackRf(d:UsbDevice):Boolean = kindOf(d)==RadioKind.HACKRF
     fun isRtlSdr(d:UsbDevice):Boolean = kindOf(d)==RadioKind.RTLSDR
+    fun isFlipper(d:UsbDevice):Boolean = kindOf(d)==RadioKind.FLIPPER
     fun supported(d:UsbDevice):Boolean = kindOf(d)!=null
 
     fun devices(manager:UsbManager):List<UsbDevice> =
@@ -68,9 +74,11 @@ object SdrDevices {
 
     fun displayName(d:UsbDevice):String {
         val kind=kindOf(d)?.label?:"SDR"
-        val product=d.productName?.trim().orEmpty()
+        val product=runCatching{d.productName}.getOrNull()?.trim().orEmpty()
         return when {
             product.isBlank() -> kind
+            // A Flipper names itself "Flipper <its name>".
+            kindOf(d)==RadioKind.FLIPPER && product.startsWith("Flipper") -> product
             product.contains(kind,ignoreCase=true) -> product
             else -> "$kind · $product"
         }
@@ -79,6 +87,7 @@ object SdrDevices {
     fun open(manager:UsbManager,device:UsbDevice):SdrUsb = when(kindOf(device)) {
         RadioKind.HACKRF -> HackRfUsb(manager,device)
         RadioKind.RTLSDR -> RtlSdrUsb(manager,device)
+        RadioKind.FLIPPER -> error("A Flipper Zero gives pulses, not IQ (RadioService receives with it through FlipperUsb)")
         null -> error("Unsupported USB SDR device")
     }
 }

@@ -79,7 +79,7 @@ class MainActivity:ComponentActivity(){
         try{
             check(!Hub.offlineBusy.value){"Stop IQ file analysis first"}
             val manager=getSystemService(UsbManager::class.java);val devices=SdrDevices.devices(manager)
-            if(devices.isEmpty()){Hub.notice.value="No HackRF or RTL-SDR device found. Connect a USB OTG cable and, if needed, a powered hub.";return}
+            if(devices.isEmpty()){Hub.notice.value="No HackRF, RTL-SDR or Flipper Zero found. Connect it with a USB OTG cable and, if needed, a powered hub.";return}
             if(devices.size==1)startDevice(devices.first()) else deviceChoices.value=devices
         }catch(e:Exception){Hub.notice.value=e.message?:"USB is unavailable"}
     }
@@ -98,10 +98,11 @@ class MainActivity:ComponentActivity(){
             check(!Hub.offlineBusy.value){"Stop IQ file analysis first"}
             check(!Hub.status.value.transmitting){"A transmission is already on air"}
             val manager=getSystemService(UsbManager::class.java)
-            val device=HackRfUsb.devices(manager).firstOrNull()
+            // Desktop KAT's transmitter: a HackRF, else a Flipper Zero.
+            val device=HackRfUsb.devices(manager).firstOrNull()?:SdrDevices.devices(manager).firstOrNull(SdrDevices::isFlipper)
             if(device==null){
                 val hasRtl=SdrDevices.devices(manager).any(SdrDevices::isRtlSdr)
-                Hub.notice.value=if(hasRtl)"RTL-SDR is receive-only. Connect a HackRF to transmit." else "No HackRF device. Connect a USB OTG cable and, if needed, a powered hub."
+                Hub.notice.value=if(hasRtl)"RTL-SDR is receive-only. Connect a HackRF or a Flipper Zero to transmit." else "No HackRF or Flipper Zero to transmit with. Connect one with a USB OTG cable and, if needed, a powered hub."
                 return
             }
             Hub.pendingTx.set(request)
@@ -173,9 +174,9 @@ class MainActivity:ComponentActivity(){
     }}
     DisposableEffect(s.keepScreen){val window=(context as ComponentActivity).window;if(s.keepScreen)window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);onDispose{window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)}}
     if(notice.isNotBlank())AlertDialog(onDismissRequest={Hub.notice.value=""},title={Text("KAT Mobile")},text={Text(notice)},confirmButton={TextButton(onClick={Hub.notice.value=""}){Text("OK")}})
-    if(deviceChoices.isNotEmpty())AlertDialog(onDismissRequest=dismissDevices,title={Text("Select USB SDR")},text={Column(verticalArrangement=Arrangement.spacedBy(8.dp)){
+    if(deviceChoices.isNotEmpty())AlertDialog(onDismissRequest=dismissDevices,title={Text("Select USB radio")},text={Column(verticalArrangement=Arrangement.spacedBy(8.dp)){
         deviceChoices.forEach{d->val k=SdrDevices.kindOf(d);OutlinedButton(onClick={pickDevice(d)},modifier=Modifier.fillMaxWidth()){
-            Column(Modifier.weight(1f)){Text(SdrDevices.displayName(d),color=Green);Text(if(k==RadioKind.HACKRF)"RX + TX · CS8" else "RX only · CU8",color=Dim,fontSize=11.sp)}
+            Column(Modifier.weight(1f)){Text(SdrDevices.displayName(d),color=Green);Text(when(k){RadioKind.HACKRF->"RX + TX · CS8";RadioKind.FLIPPER->"RX + TX · pulses from its command line";else->"RX only · CU8"},color=Dim,fontSize=11.sp)}
         }}
     }},confirmButton={TextButton(onClick=dismissDevices){Text("Cancel")}})
     if(clear)AlertDialog(onDismissRequest={clear=false},title={Text("Clear signal history?")},text={Text("Clears captured signal history. Settings and IQ files are retained.")},confirmButton={TextButton(onClick={Hub.delete(captures.map{it.id}.toSet());selected=null;clear=false}){Text("Delete")}},dismissButton={TextButton(onClick={clear=false}){Text("Cancel")}})
@@ -208,8 +209,10 @@ class MainActivity:ComponentActivity(){
         Box(Modifier.weight(1f).fillMaxHeight()) { when(tab){
             0->LazyColumn(verticalArrangement=Arrangement.spacedBy(14.dp),contentPadding=PaddingValues(bottom=20.dp)){
                 item{
-                    val radioTitle=when(status.radioKind){RadioKind.HACKRF->"RADIO / HACKRF";RadioKind.RTLSDR->"RADIO / RTL-SDR";null->"RADIO / SDR"}
-                    val radioSummary=if(status.radioKind==RadioKind.RTLSDR){
+                    val radioTitle=when(status.radioKind){RadioKind.HACKRF->"RADIO / HACKRF";RadioKind.RTLSDR->"RADIO / RTL-SDR";RadioKind.FLIPPER->"RADIO / FLIPPER ZERO";null->"RADIO / SDR"}
+                    val radioSummary=if(status.radioKind==RadioKind.FLIPPER){
+                        "SUB-GHZ COMMAND LINE · OOK · NO IQ, NO HOPPING"
+                    }else if(status.radioKind==RadioKind.RTLSDR){
                         val rtlRate=if(status.running)status.activeSampleRate else s.rtlSampleRate
                         "${"%.2f".format(Locale.US,rtlRate/1e6)} MS/s   GAIN ${RtlSdrUsb.gainLabel(s.rtlAutoGain,s.rtlGainTenthsDb)}   PPM ${s.rtlPpm}${if(s.rtlBiasTee)"   BIAS-T"else""}"
                     }else{
@@ -219,7 +222,7 @@ class MainActivity:ComponentActivity(){
                     Text(radioSummary,color=Dim,fontFamily=FontFamily.Monospace,fontSize=11.sp)
                     Row(horizontalArrangement=Arrangement.spacedBy(10.dp)){
                         Button(onClick={if(status.running)RadioService.action(context,"STOP")else start()},enabled=!offline&&!status.transmitting){Icon(if(status.running)Icons.Outlined.Stop else Icons.Outlined.PlayArrow,null);Text(if(status.running)"Stop RX"else"Start RX")}
-                        OutlinedButton(onClick={RadioService.action(context,"RECORD")},enabled=status.running){Icon(if(status.recording.isNotBlank())Icons.Outlined.StopCircle else Icons.Outlined.FiberManualRecord,null);Text(if(status.recording.isNotBlank())"Stop IQ"else"Record IQ")}
+                        OutlinedButton(onClick={RadioService.action(context,"RECORD")},enabled=status.running&&status.radioKind!=RadioKind.FLIPPER){Icon(if(status.recording.isNotBlank())Icons.Outlined.StopCircle else Icons.Outlined.FiberManualRecord,null);Text(if(status.recording.isNotBlank())"Stop IQ"else"Record IQ")}
                     }
                     if(s.hopping)Text(if(status.running)"HOP ${status.hopIndex}/${status.hopTotal} · ${s.hopDwellMs} ms · ${status.hopSwitches} switches"else"HOP ready · ${s.hopDwellMs} ms per frequency",color=Green,fontFamily=FontFamily.Monospace,fontSize=12.sp)
                     Text(status.message,color=Dim,fontSize=12.sp)
@@ -269,7 +272,7 @@ class MainActivity:ComponentActivity(){
     val tx=remember(c.decode){NativeTx.actions(c.decode)}
     val message by Hub.txMessage.collectAsStateWithLifecycle()
     Text("TRANSMIT",color=Dim,fontSize=11.sp)
-    if(rtlRxOnly)Text("RTL-SDR is receive-only; transmitting requires a HackRF.",color=Dim,fontSize=11.sp)
+    if(rtlRxOnly)Text("RTL-SDR is receive-only; transmitting requires a HackRF or a Flipper Zero.",color=Dim,fontSize=11.sp)
     Row{
         TextButton(onClick={send(c,"replay",null)},enabled=enabled&&c.pulses.isNotEmpty()){Text("Replay")}
         if(tx.encodes&&tx.gate)TextButton(onClick={send(c,"next",null)},enabled=enabled){Text("Send next code")}
@@ -392,18 +395,25 @@ class MainActivity:ComponentActivity(){
         item{Frame("SESSION / ARCHIVE"){NumberField("Maximum captures",edit.maxCaptures,!running){edit=edit.copy(maxCaptures=it)};NumberField("IQ quota (MB)",edit.recordingQuotaMb,!running){edit=edit.copy(recordingQuotaMb=it)};Toggle("Save session automatically",edit.autosave,!running){edit=edit.copy(autosave=it)};Toggle("Include RAW pulses in JSON export",edit.includeRaw,!running){edit=edit.copy(includeRaw=it)};Toggle("Keep screen on",edit.keepScreen,!running){edit=edit.copy(keepScreen=it)};NumberField("Signal text size",edit.fontSize,!running){edit=edit.copy(fontSize=it)}}}
         item{Button(onClick=::save,enabled=!running,modifier=Modifier.fillMaxWidth()){Text("Save settings")};OutlinedButton(onClick=import,enabled=!running,modifier=Modifier.fillMaxWidth()){Text("Import KAT config.ini / RAW / FOB")};if(running)Text("Stop RX to change settings.",color=Cyan)}
         item{Frame("THANK YOU",Modifier.testTag("kara-thanks")){Text("Thank you, Kara, for supporting me in developing the Android app.",color=Green,fontSize=15.sp);Text("— CooKie",color=Dim,fontSize=12.sp)}}
-        item{Frame("ABOUT"){OutlinedButton(onClick={whatsNew=true}){Text("What's new")};Text("KAT Mobile RX ${BuildConfig.VERSION_NAME}\nReceive core: KAT ${BuildConfig.KAT_CORE}\nRadios: HackRF (RX + TX) · RTL-SDR R820T/R820T2/R828D (RX only)\nConnection: Android USB Host, no root or external driver required.",fontSize=12.sp,color=Dim);Text("${NativeDecoder.protocols.size} native KAT receive decoders, plus Nexus/TFA and Rubicson/Solight sensors. A format match does not confirm a manufacturer; not every physical model has been verified.",fontSize=12.sp,color=Dim);Text("KAT's receive core identifies each signal, and KAT's encoders send Replay, Send next code and the car and gate buttons through the HackRF (a signal's details, Transmit). Key recovery is not part of the app. Imported FOB metadata is preserved.",fontSize=12.sp,color=Dim);Text("Data stays on this device. Sessions use Android Keystore encryption; IQ recordings are stored in app-private storage. No network permission.",fontSize=12.sp,color=Dim);Text("KAT source: BSD-3-Clause, © 2026 .kara. Embedded RTL-SDR control driver adapted from rtl-sdr-rs (MPL-2.0). Original license notices are included in the project and APK.",fontSize=11.sp,color=Dim)}}
+        item{Frame("ABOUT"){OutlinedButton(onClick={whatsNew=true}){Text("What's new")};Text("KAT Mobile RX ${BuildConfig.VERSION_NAME}\nReceive core: KAT ${BuildConfig.KAT_CORE}\nRadios: HackRF (RX + TX) · RTL-SDR R820T/R820T2/R828D (RX only) · Flipper Zero (RX + TX, its command line)\nConnection: Android USB Host, no root or external driver required.",fontSize=12.sp,color=Dim);Text("${NativeDecoder.protocols.size} native KAT receive decoders, plus Nexus/TFA and Rubicson/Solight sensors. A format match does not confirm a manufacturer; not every physical model has been verified.",fontSize=12.sp,color=Dim);Text("KAT's receive core identifies each signal, and KAT's encoders send Replay, Send next code and the car and gate buttons through the HackRF or a Flipper Zero (a signal's details, Transmit). Key recovery is not part of the app. Imported FOB metadata is preserved.",fontSize=12.sp,color=Dim);Text("Data stays on this device. Sessions use Android Keystore encryption; IQ recordings are stored in app-private storage. No network permission.",fontSize=12.sp,color=Dim);Text("KAT source: BSD-3-Clause, © 2026 .kara. Embedded RTL-SDR control driver adapted from rtl-sdr-rs (MPL-2.0). Original license notices are included in the project and APK.",fontSize=11.sp,color=Dim)}}
     }
 }
 
 @Composable private fun WhatsNew(close:()->Unit){
     AlertDialog(onDismissRequest=close,title={Text("What's new · ${BuildConfig.VERSION_NAME}")},text={Column(Modifier.verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(12.dp)){
+        Text("Flipper Zero over USB OTG",color=Green,fontWeight=FontWeight.Bold)
+        Text("A Flipper Zero receives and transmits, as with desktop KAT: its command line streams the pulses its CC1101 hears, and KAT cuts each frame its decoders find out of the noise; a transmission is written to its SD card and played. No IQ, so no spectrum, recording or hopping. Close any app on the Flipper first.")
+        Text("Sent where it was heard",color=Green,fontWeight=FontWeight.Bold)
+        Text("A capture goes out on the frequency its remote was heard on, the tuned frequency plus the offset KAT's receiver measured, and so do its .sub and .fob exports. Ford V1 remotes get their whole press (three sends, flags 00, 08 and 10).")
+        Text("One entry per press",color=Green,fontWeight=FontWeight.Bold)
+        Text("Every press and button of a remote is its own signal (a Ford V1 remote's presses were counted as one), and noise is no longer read as a Siemens or Microchip remote.")
         Text("RTL-SDR over USB OTG",color=Green,fontWeight=FontWeight.Bold)
         Text("Direct receive-only support for RTL2832U dongles with R820T, R820T2 and R828D tuners (including RTL-SDR Blog V3/V4) over Android's USB Host API — no root and no external driver app required. Includes live CU8 spectrum/waterfall, frequency hopping, .cu8 IQ recording, auto/manual tuner gain, PPM correction and optional bias-tee.")
+        Text("1.30.0",color=Dim,fontWeight=FontWeight.Bold)
         Text("Transmit",color=Green,fontWeight=FontWeight.Bold)
         Text("KAT Mobile transmits through the HackRF, as KAT does. Replay sends a capture's pulses; a car remote's Lock, Unlock, Trunk and Panic and a gate remote's Send next code and buttons come from KAT's encoders, and a rolling code's counter advances with every press. Receiving pauses for a transmission; TX power is in Settings.")
-        Text("KAT ${BuildConfig.KAT_CORE} receive core",color=Green,fontWeight=FontWeight.Bold)
-        Text("KAT Mobile's version now follows KAT's: this release's receive core is KAT ${BuildConfig.KAT_CORE}'s, with the same ${NativeDecoder.protocols.size} decoders, its encoders, and KAT's embedded keys, which it now loads at start as KAT does: the Kia V3/V4, V5 and V6, VAG, PSA, Ford V1, BMW V3 and Audi V3 decoders decrypt with them.")
+        Text("KAT 1.30.0 receive core",color=Green,fontWeight=FontWeight.Bold)
+        Text("KAT Mobile's version now follows KAT's: that release's receive core was KAT 1.30.0's, with KAT's decoders, its encoders, and KAT's embedded keys, which it now loads at start as KAT does: the Kia V3/V4, V5 and V6, VAG, PSA, Ford V1, BMW V3 and Audi V3 decoders decrypt with them.")
         Text("KAT's official Android app",color=Green,fontWeight=FontWeight.Bold)
         Text("KAT Mobile is now built and tested from github.com/KaraZajac/KAT-Mobile on every change. Its application ID is io.karazajac.katmobile, so it installs beside the earlier test builds; the notification's Stop button is now in English.")
         Text("0.8.0",color=Dim,fontWeight=FontWeight.Bold)

@@ -11,6 +11,8 @@ mod radio {
     pub mod dsp;
     pub mod pipeline;
     pub mod tx;
+    /// Desktop KAT's Flipper Zero console session and receive stream, unchanged (`mobile_flipper`).
+    pub mod flipper_console;
     pub mod demodulator {
         #[derive(Debug,Clone,Copy,PartialEq,Eq)]
         pub struct LevelDuration {pub level:bool,pub duration_us:u32}
@@ -23,6 +25,7 @@ pub use mobile_rx::{ReceiveSession,ReceiveOutput};
 pub use radio::dsp::IqFormat;
 pub mod rtlsdr;
 pub mod mobile_rtlsdr;
+pub mod mobile_flipper;
 pub mod interop_fob;
 fn plural(n:usize)->&'static str{if n==1{""}else{"s"}}
 fn has_extension(path:&std::path::Path,extension:&str)->bool{

@@ -161,6 +161,9 @@ class CoreTest {
         assertEquals(42,SdrDevices.RTL_SDR_IDS.size)
         assertTrue(RadioKind.HACKRF.supportsTx)
         assertFalse(RadioKind.RTLSDR.supportsTx)
+        // The Flipper Zero's console (ST's virtual COM port), a transmitter as on desktop KAT.
+        assertEquals(RadioKind.FLIPPER,SdrDevices.kindOf(0x0483,0x5740))
+        assertTrue(RadioKind.FLIPPER.supportsTx)
     }
     @Test fun fftFindsSyntheticCarrierInUnsignedCu8Samples(){
         val n=1024;val bytes=ByteArray(n*2)
