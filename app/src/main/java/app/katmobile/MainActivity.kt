@@ -161,13 +161,14 @@ class MainActivity:ComponentActivity(){
             };if(sessionImport==null)Hub.notice.value="Import complete"
         }catch(e:Exception){Hub.notice.value=e.message?:"Import failed"}finally{importBusy=false}
     }}
-    fun exportCapture(c:Capture,format:String){try{exportData=when(format){"sub"->StateFormat.rawSub(c);"fob"->StateFormat.fob(c);else->StateFormat.captureJson(c,s.includeRaw)}.toByteArray();export.launch("KAT_${c.frequency}_${c.id.take(8)}.$format")}catch(e:Exception){Hub.notice.value=e.message?:"Export failed"}}
+    fun exportCapture(c:Capture,format:String){try{exportData=when(format){"sub"->StateFormat.rawSub(c);"fob"->StateFormat.fob(c);else->StateFormat.captureJson(c,s.includeRaw)}.toByteArray();export.launch("KAT_${c.heardFrequency}_${c.id.take(8)}.$format")}catch(e:Exception){Hub.notice.value=e.message?:"Export failed"}}
     // KAT's core plans the transmission (Replay, or its encoder with the copies KAT sends); the radio service sends it.
     fun send(c:Capture,action:String,button:TxButton?){scope.launch{
         try{
             val plan=withContext(Dispatchers.Default){NativeTx.plan(c,action,button?.code)}
             val what=when(action){"replay"->"a replay of ${c.pulses.size} pulses";"next"->"the next code"+plan.button_label?.let{" ($it)"}.orEmpty();else->plan.button_label?:button?.label?:"a button"}
-            transmit(Hub.TxRequest(c.id,what,c.frequency,plan))
+            // Where the remote was heard (desktop KAT's `heard_frequency`), not where the radio was tuned.
+            transmit(Hub.TxRequest(c.id,what,c.heardFrequency,plan))
         }catch(e:Exception){Hub.notice.value=e.message?:"This capture cannot be sent"}
     }}
     DisposableEffect(s.keepScreen){val window=(context as ComponentActivity).window;if(s.keepScreen)window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);onDispose{window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)}}
@@ -184,6 +185,7 @@ class MainActivity:ComponentActivity(){
         Text("Received: ${dateTime(c.time)}",color=Dim,fontSize=12.sp)
         Text("${c.pulses.size} pulses · ${c.durationUs/1000.0} ms · ×${c.repeats}",fontFamily=FontFamily.Monospace,fontSize=12.sp)
         if(c.recognition.isNotBlank())Text(c.recognition,color=Green,fontSize=12.sp)
+        if(c.heardFrequency!=c.frequency)Text("Heard at ${frequency(c.heardFrequency)}, where it is sent",color=Dim,fontSize=12.sp)
         if(c.serial.isNotBlank())Text("Serial: ${c.serial}\nButton: ${c.button}\nCounter: ${c.counter}",fontFamily=FontFamily.Monospace,fontSize=12.sp)
         TransmitControls(c,!status.transmitting&&!offline,status.running&&status.radioKind==RadioKind.RTLSDR,::send)
         PulsePlot(c,Modifier.fillMaxWidth().height(110.dp))

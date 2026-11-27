@@ -270,9 +270,26 @@ impl Capture {
         }
     }
 
-    /// Get the frequency in MHz as a string
-    pub fn frequency_mhz(&self) -> String {
-        format!("{:.2}MHz", self.frequency as f64 / 1_000_000.0)
+    /// Where the remote sent, as heard: the frequency the receiver was tuned to plus the offset KAT's
+    /// receive pipeline measured of the burst ([RfMeasurement::offset_hz]: the carrier, or the centre
+    /// of the two tones), to the nearest kHz; the capture's frequency when nothing was measured (a
+    /// file of pulses, a Flipper). Transmissions and exports use it: a wideband receiver hears a
+    /// remote far from its tuned frequency (a HackRF ±1 MHz), and a remote whose channels are not the
+    /// tuned frequency (a Ford V1 remote 330 kHz below and 480 kHz above 433.92 MHz) is not heard by
+    /// its car's narrowband receiver there.
+    pub fn heard_frequency(&self) -> u32 {
+        match self.measured {
+            Some(m) if m.offset_hz.is_finite() => {
+                let hz = f64::from(self.frequency) + f64::from(m.offset_hz);
+                ((hz / 1e3).round() * 1e3).clamp(0.0, f64::from(u32::MAX)) as u32
+            }
+            _ => self.frequency,
+        }
+    }
+
+    /// The frequency it was heard on ([Self::heard_frequency]) in MHz, as a string ("433.92MHz").
+    pub fn heard_frequency_mhz(&self) -> String {
+        format!("{:.2}MHz", f64::from(self.heard_frequency()) / 1e6)
     }
 
     /// Get the protocol name or "Unknown"

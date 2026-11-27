@@ -41,9 +41,11 @@ object Hub {
     @Synchronized fun configure(s:RadioSettings){check(!status.value.running&&!offlineBusy.value){"Stop reception or analysis before changing settings"};s.validate();settings.value=s;persist()}
     @Synchronized fun add(c:Capture){
         latestReception.value=c
-        val same=captures.value.lastOrNull{it.frequency==c.frequency&&it.modulation==c.modulation&&it.fingerprint==c.fingerprint}
+        val identity=c.identity
+        val same=captures.value.lastOrNull{it.frequency==c.frequency&&it.modulation==c.modulation&&it.identity==identity}
+        // A repeat counts on the first reception, whose pulses the entry keeps: its measurement (SNR, offset) stays with them.
         if(same!=null&&(settings.value.ignoreDuplicates||c.time-same.time<500))captures.value=captures.value.map{if(it.id==same.id)it.copy(repeats=it.repeats+1,
-            protocol=if(c.protocol!="Unknown")c.protocol else it.protocol,recognition=c.recognition.ifBlank{it.recognition})
+            protocol=if(c.protocol!="Unknown")c.protocol else it.protocol,recognition=it.recognition.ifBlank{c.recognition},offsetHz=it.offsetHz?:c.offsetHz)
             .let{merged->if(merged.decode.isBlank())merged.withDecode(c.decode)else merged} else it}
         else captures.value=bounded(captures.value+c)
         if(settings.value.autosave)persist()

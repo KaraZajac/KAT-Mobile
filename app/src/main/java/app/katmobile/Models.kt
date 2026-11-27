@@ -47,8 +47,21 @@ data class Capture(
     val source:String="HackRF",val pulses:List<Pulse> = emptyList(),val repeats:Int=1,
     val serial:String="",val button:String="",val counter:String="",val metadata:String="",val recognition:String="",
     /** KAT's decode of the remote (native/src/mobile_tx.rs `Decode`, JSON): what its encoder sends from. A rolling code's advances with every transmission. */
-    val decode:String=""
-){val durationUs get()=pulses.sumOf{it.duration_us.toLong()};val fingerprint get()=pulses.dropWhile{!it.level}.dropLastWhile{!it.level&&it.duration_us>=3000}.take(256).map{(if(it.level)1 else -1)*(it.duration_us/20)}.hashCode()}
+    val decode:String="",
+    /** Where KAT's receiver measured the burst, in Hz from [frequency] (the carrier, or the centre of the two FSK tones); null when nothing measured it (an imported file, a session saved by an earlier version). */
+    val offsetHz:Double?=null
+){
+    val durationUs get()=pulses.sumOf{it.duration_us.toLong()}
+    /** The whole pulse train (from the first pulse, without the trailing gap) in 20 µs steps. */
+    val fingerprint get()=pulses.dropWhile{!it.level}.dropLastWhile{!it.level&&it.duration_us>=3000}.map{(if(it.level)1 else -1)*(it.duration_us/20)}.hashCode()
+    /** What makes two receptions one signal, as desktop KAT's duplicate check: a decode's protocol, data (its first 64 bits), serial, button and counter, so every press, and every send of a press whose sends differ (Ford V1's flags), is its own; for a signal KAT does not decode, the whole pulse train. (It used to be the first 256 pulses for every signal: a Ford V1 press is all preamble there, so every press and button of a remote became one entry.) */
+    val identity:String get(){
+        val data=decode.takeIf{it.isNotBlank()}?.let{runCatching{JsonParser.parseString(it).asJsonObject["data"]?.takeIf{d->d.isJsonPrimitive}?.asString}.getOrNull()}
+        return if(protocol!="Unknown"&&data!=null)"decode|$protocol|$data|$serial|$button|$counter" else "pulses|$fingerprint"
+    }
+    /** Where the remote sent, as heard (desktop KAT's `heard_frequency`): [frequency] plus the measured offset, to the nearest kHz. Transmissions and exports use it: a remote heard 330 kHz from the tuned frequency is on a channel of its own, which its car's receiver listens on. */
+    val heardFrequency:Long get()=offsetHz?.takeIf{it.isFinite()}?.let{Math.round((frequency+it)/1000.0)*1000L}?:frequency
+}
 
 /** The capture with KAT's decode [json], and the serial, button and counter desktop KAT lists from it. */
 fun Capture.withDecode(json:String):Capture{
@@ -107,8 +120,8 @@ object StateFormat {
         val root=if(existing?.get("format")?.asString=="kat-fob"&&existing.get("signal")?.isJsonObject==true)existing.deepCopy()else JsonObject().apply{
             addProperty("version","2.0");addProperty("format","kat-fob")
             add("signal",JsonObject().apply{
-                addProperty("protocol",c.protocol);addProperty("frequency",c.frequency)
-                addProperty("frequency_mhz",java.lang.String.format(java.util.Locale.US,"%.3f",c.frequency/1e6))
+                addProperty("protocol",c.protocol);addProperty("frequency",c.heardFrequency)
+                addProperty("frequency_mhz",java.lang.String.format(java.util.Locale.US,"%.3f",c.heardFrequency/1e6))
                 addProperty("modulation","Unknown");addProperty("received_rf",c.modulation)
                 addProperty("encryption","Unknown");addProperty("data_bits",0);addProperty("data_hex","")
                 addProperty("serial","-");addProperty("key","");addProperty("button_name","-")
@@ -153,7 +166,7 @@ object StateFormat {
         val match=ProtocolRecognizer().identify(c.pulses,c.modulation,c.frequency)
         return if(match==null)c else c.copy(protocol=match.name,recognition=match.evidence).withDecode(match.decode)
     }
-    fun rawSub(c:Capture):String="Filetype: Flipper SubGhz RAW File\nVersion: 1\nFrequency: ${c.frequency}\nPreset: FuriHalSubGhzPresetOok650Async\nProtocol: RAW\n"+
+    fun rawSub(c:Capture):String="Filetype: Flipper SubGhz RAW File\nVersion: 1\nFrequency: ${c.heardFrequency}\nPreset: FuriHalSubGhzPresetOok650Async\nProtocol: RAW\n"+
         c.pulses.chunked(512).joinToString("\n"){batch->"RAW_Data: "+batch.joinToString(" "){((if(it.level)1 else -1)*it.duration_us).toString()}}+"\n"
     fun captureJson(c:Capture,includeRaw:Boolean):String {
         val root=if(c.metadata.isNotBlank())JsonParser.parseString(c.metadata).asJsonObject else gson.toJsonTree(c).asJsonObject

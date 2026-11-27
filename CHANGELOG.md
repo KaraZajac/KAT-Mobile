@@ -16,6 +16,29 @@ All notable changes to KAT Mobile are documented here.
   attached, Start RX asks which one. Transmitting still needs a HackRF. The driver's PPM correction
   now reaches the tuner too, as librtlsdr's does. Not yet tested with a real dongle.
 
+### Fixed
+
+From a tester's session with a Ford ute, whose car ignored the codes the app sent it.
+
+- **Every press of a remote is its own signal.** Two receptions counted as one signal (one entry,
+  its repeat count raised) when their first 256 pulses matched. A Ford V1 burst's first 256 pulses
+  are all preamble, so every press and every button of the ute's remote became one entry (×34),
+  showing the first press's pulses and decode but the last one's SNR and offset. Now, as in desktop
+  KAT, a decoded signal is the same one only with the same protocol, frame, serial, button and
+  counter, and an undecoded one only with the same whole pulse train; a repeat keeps the first
+  reception's measurement, which its pulses are.
+- **A capture is sent where its remote was heard**, as desktop KAT now does: on the frequency the
+  radio was tuned to plus the offset the receiver measured, to the nearest kHz. The ute's remote was
+  heard 330 kHz below and 480 kHz above 433.92 MHz and sent back on 433.92 MHz. The signal's details
+  say where it will go when that differs, and the `.sub`, `.fob` and file names of an export use it.
+  Captures from earlier versions have no measurement and are sent as before.
+- From KAT's core (KAT's Unreleased changes): Ford V1 sends the remote's whole press, three sends
+  with the flags bytes 00, 08 and 10, where it sent the first of ProtoPirate's bursts three times;
+  and noise is no longer read as a Siemens-5WY72XX, Microchip HCS361 or HCS362 remote (eleven such
+  decodes in the session).
+
+## [1.30.0] - 2026-11-26
+
 KAT Mobile transmits, as KAT does, and its version now follows KAT's: its core is KAT 1.30.0's.
 
 ### Added
