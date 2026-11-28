@@ -2,6 +2,15 @@
 
 All notable changes to KAT Mobile are documented here.
 
+## [1.31.0] - 2026-11-27
+
+### Added
+
+- **Subaru V2 decoder** (decode-only), from KAT's core: the 433.92 MHz Australian/European Subaru
+  remote-head key of the 2010s (Liberty/Legacy, Impreza/WRX/STI and relatives), differential
+  Manchester, 128-bit frames. The rolling payload is encrypted, so the app identifies the remote and
+  its 32-bit key ID and can replay a press, but does not synthesise new codes.
+
 ## [1.30.1] - 2026-11-27
 
 A Flipper Zero as the phone's radio, receiving and transmitting as with desktop KAT; captures sent
