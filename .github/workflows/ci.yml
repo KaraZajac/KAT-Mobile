@@ -117,7 +117,7 @@ jobs:
             adb install -r app/build/outputs/apk/debug/app-debug.apk
             adb install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
             adb shell pm grant io.karazajac.katmobile.qa android.permission.POST_NOTIFICATIONS
-            adb shell am instrument -w -e class app.katmobile.AppTest io.karazajac.katmobile.qa.test/androidx.test.runner.AndroidJUnitRunner | tee instrumentation.txt
+            adb shell am instrument -w -e class app.katmobile.AppTest,app.katmobile.FlipperDeviceTest io.karazajac.katmobile.qa.test/androidx.test.runner.AndroidJUnitRunner | tee instrumentation.txt
             adb exec-out run-as io.karazajac.katmobile.qa tar -cf - files/qa > screenshots.tar || true
             grep -q 'OK (' instrumentation.txt
 

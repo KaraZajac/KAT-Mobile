@@ -123,7 +123,7 @@ emulator connected:
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 adb install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
 adb shell pm grant io.karazajac.katmobile.qa android.permission.POST_NOTIFICATIONS
-adb shell am instrument -w -e class app.katmobile.AppTest io.karazajac.katmobile.qa.test/androidx.test.runner.AndroidJUnitRunner
+adb shell am instrument -w -e class app.katmobile.AppTest,app.katmobile.FlipperDeviceTest io.karazajac.katmobile.qa.test/androidx.test.runner.AndroidJUnitRunner
 ```
 
 CI runs all of them on every push, the instrumentation tests on an Android 14 emulator. The

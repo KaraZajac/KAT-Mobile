@@ -407,6 +407,8 @@ class MainActivity:ComponentActivity(){
         Text("A capture goes out on the frequency its remote was heard on, the tuned frequency plus the offset KAT's receiver measured, and so do its .sub and .fob exports. Ford V1 remotes get their whole press (three sends, flags 00, 08 and 10).")
         Text("One entry per press",color=Green,fontWeight=FontWeight.Bold)
         Text("Every press and button of a remote is its own signal (a Ford V1 remote's presses were counted as one), and noise is no longer read as a Siemens or Microchip remote.")
+        Text("KAT ${BuildConfig.KAT_CORE} receive core",color=Green,fontWeight=FontWeight.Bold)
+        Text("This release's core is KAT ${BuildConfig.KAT_CORE}'s: its ${NativeDecoder.protocols.size} decoders and its encoders, with Ford V1's whole press, the Siemens and Microchip noise checks, and the Flipper Zero's console session, which KAT Mobile uses unchanged.")
         Text("RTL-SDR over USB OTG",color=Green,fontWeight=FontWeight.Bold)
         Text("Direct receive-only support for RTL2832U dongles with R820T, R820T2 and R828D tuners (including RTL-SDR Blog V3/V4) over Android's USB Host API — no root and no external driver app required. Includes live CU8 spectrum/waterfall, frequency hopping, .cu8 IQ recording, auto/manual tuner gain, PPM correction and optional bias-tee.")
         Text("1.30.0",color=Dim,fontWeight=FontWeight.Bold)
