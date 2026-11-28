@@ -1,6 +1,6 @@
 [package]
 name = "kat-mobile-rx-core"
-version = "1.31.0"
+version = "1.32.0"
 edition = "2021"
 license = "BSD-3-Clause"
 autobins = false

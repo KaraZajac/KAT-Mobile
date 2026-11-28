@@ -401,8 +401,10 @@ class MainActivity:ComponentActivity(){
 
 @Composable private fun WhatsNew(close:()->Unit){
     AlertDialog(onDismissRequest=close,title={Text("What's new · ${BuildConfig.VERSION_NAME}")},text={Column(Modifier.verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(12.dp)){
+        Text("BelKorn gate remotes",color=Green,fontWeight=FontWeight.Bold)
+        Text("A new decoder for gate and barrier remotes sold as Korn, BelGate, Furniteh and other brands. Their rolling code is not encrypted, so KAT can send a remote's next press, with any of its buttons.")
         Text("Subaru V2 remote",color=Green,fontWeight=FontWeight.Bold)
-        Text("A new decoder for the 433.92 MHz Australian/European Subaru remote-head key of the 2010s (Liberty, Impreza/WRX and relatives). Its rolling code is encrypted, so KAT identifies the remote and its key ID and can replay a press, but does not make new codes.")
+        Text("A decoder for an Australian 433.92 MHz Subaru remote-head key (FoxFW names it after the Liberty GT). Its rolling code is encrypted, so KAT identifies the remote and its key ID and can replay a press, but does not make new codes.")
         Text("Flipper Zero over USB OTG",color=Green,fontWeight=FontWeight.Bold)
         Text("A Flipper Zero receives and transmits, as with desktop KAT: its command line streams the pulses its CC1101 hears, and KAT cuts each frame its decoders find out of the noise; a transmission is written to its SD card and played. No IQ, so no spectrum, recording or hopping. Close any app on the Flipper first.")
         Text("Sent where it was heard",color=Green,fontWeight=FontWeight.Bold)

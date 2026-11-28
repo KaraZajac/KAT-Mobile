@@ -111,12 +111,12 @@ class AppTest {
     }
     @Test fun nativeCatalogContainsTheWholeDesktopRegistry(){
         assertTrue("Native KAT core unavailable: ${NativeDecoder.loadProblem}",NativeDecoder.available)
-        assertEquals(168,NativeDecoder.protocols.size)
+        assertEquals(169,NativeDecoder.protocols.size)
         assertTrue(NativeDecoder.protocols.any{it.name=="VAG"})
         assertTrue(NativeDecoder.protocols.any{it.name=="Princeton"})
         compose.onNodeWithContentDescription("Settings",useUnmergedTree=true).performClick()
         compose.onNodeWithText("View supported protocols").performClick()
-        capture("05-protocols");compose.onNodeWithText("KAT RX · 168").assertExists()
+        capture("05-protocols");compose.onNodeWithText("KAT RX · 169").assertExists()
     }
     @Test fun nativeCoreRecognizesSyntheticIqInsteadOfOnlyListingProtocols(){
         assertTrue(NativeDecoder.available)

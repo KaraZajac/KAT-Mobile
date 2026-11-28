@@ -9,7 +9,7 @@ fn princeton()->Vec<i32>{
     p
 }
 
-#[test]fn original_catalog_is_complete(){let protocols=catalog();println!("Catalog contains {} registered decoders",protocols.len());std::fs::write("catalog.json",serde_json::to_string_pretty(&protocols).unwrap()).unwrap();assert_eq!(protocols.len(),168);for name in ["Princeton","CAME","Nice FLO","VAG","PSA","Ford V0"]{assert!(protocols.iter().any(|p|p.name==name),"Missing {name}");}}
+#[test]fn original_catalog_is_complete(){let protocols=catalog();println!("Catalog contains {} registered decoders",protocols.len());std::fs::write("catalog.json",serde_json::to_string_pretty(&protocols).unwrap()).unwrap();assert_eq!(protocols.len(),169);for name in ["Princeton","CAME","Nice FLO","VAG","PSA","Ford V0"]{assert!(protocols.iter().any(|p|p.name==name),"Missing {name}");}}
 #[test]fn original_registry_recognizes_a_synthetic_fixed_code_format(){let found=identify(&princeton(),433_920_000,false).unwrap();assert!(found.iter().any(|r|r.name=="Princeton"),"{found:?}");}
 #[test]fn no_payload_or_credentials_are_returned(){let json=serde_json::to_value(identify(&princeton(),433_920_000,false).unwrap()).unwrap();for entry in json.as_array().unwrap(){let keys=entry.as_object().unwrap().keys().map(String::as_str).collect::<Vec<_>>();assert_eq!(keys,vec!["bits","integrity","name"]);}}
 #[test]fn malformed_input_and_noise_are_rejected(){assert!(identify(&[0],433_920_000,false).is_err());assert!(identify(&[i32::MIN],433_920_000,false).is_err());assert!(identify(&vec![100;32769],433_920_000,false).is_err());assert!(identify(&[41,-72,95,-18],433_920_000,false).unwrap().is_empty());}

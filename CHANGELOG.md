@@ -2,6 +2,19 @@
 
 All notable changes to KAT Mobile are documented here.
 
+## [1.32.0] - 2026-11-27
+
+### Added
+
+- **BelKorn decoder and encoder**, from KAT's core: gate and barrier remotes sold as Korn, BelGate,
+  Furniteh and other rebrands (a 118-bit rolling code with no encryption, from RogueMaster and FoxFW).
+  Send next code makes the remote's next press, with any of its buttons.
+
+### Fixed
+
+- Subaru V2 was described as the remote of several models (Liberty/Legacy, Impreza/WRX/STI): it was
+  worked out from one key, and the model list was a guess. What's new now says so.
+
 ## [1.31.0] - 2026-11-27
 
 ### Added

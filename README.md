@@ -42,7 +42,7 @@ arising from use of this software.
   Unleashed and the others desktop KAT follows; close any app on the Flipper first. Over USB only, as
   desktop KAT: the Flipper's Bluetooth link carries its app protocol, not the command line. Not yet
   tried with a real Flipper on a phone.
-- **KAT's core** — KAT 1.31.0's receive pipeline (burst detection, channel filtering, the AM and
+- **KAT's core** — KAT 1.32.0's receive pipeline (burst detection, channel filtering, the AM and
   FM slicers), its protocol decoders and encoders and its embedded keys, built from KAT's Rust
   source and called over JNI. A signal is listed with its protocol, bit count, whether its
   checksum holds, and its serial, button and counter, as KAT lists them; frames that fail their
@@ -138,15 +138,15 @@ device). Test a transmission on air with a receiver you own (KAT with an RTL-SDR
   USB (`HackRfUsb.kt`, and `Transmit.kt` for desktop KAT's transmit sequence), RTL-SDR over USB
   (`RtlSdrUsb.kt`), the Flipper Zero's console over USB CDC (`FlipperUsb.kt`), the radio service,
   storage, import and export, and the tests.
-- `native/src/` — KAT 1.31.0's code: its receive pipeline, decoders, encoders and transmit waveform
-  (`radio/tx.rs`). 221 files are KAT's unchanged; the other four leave out what the app does not
+- `native/src/` — KAT 1.32.0's code: its receive pipeline, decoders, encoders and transmit waveform
+  (`radio/tx.rs`). 222 files are KAT's unchanged; the other four leave out what the app does not
   have (key recovery, the user's key files, the vulnerability database). `lib.rs`, `mobile_rx.rs`,
   `mobile_tx.rs` and `mobile_rtlsdr.rs` are the JNI layer (`mobile_tx.rs` does what desktop KAT's
   app does around its encoders), `rtlsdr/` is the embedded MPL-2.0 RTL2832U + R820T/R820T2/R828D
   control driver adapted from desktop KAT's `rtl-sdr-rs`, and `interop_fob.rs` is KAT's `.fob`
   reader.
 - `tools/sync-kat-core.sh` brings a KAT release into `native/src`: `tools/sync-kat-core.sh ../KAT
-  v1.30.0 v1.31.0` merges KAT's changes in and keeps KAT Mobile's edits. A conflict means KAT
+  v1.31.0 v1.32.0` merges KAT's changes in and keeps KAT Mobile's edits. A conflict means KAT
   changed code that KAT Mobile edits. KAT Mobile's version follows KAT's.
 
 ## Credits
